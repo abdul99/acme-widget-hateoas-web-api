@@ -1,0 +1,121 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<beans xmlns="http://www.springframework.org/schema/beans"
+	xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:aop="http://www.springframework.org/schema/aop"
+	xmlns:context="http://www.springframework.org/schema/context"
+	xmlns:mvc="http://www.springframework.org/schema/mvc" xmlns:p="http://www.springframework.org/schema/p"
+	xmlns:util="http://www.springframework.org/schema/util"
+	xsi:schemaLocation="
+		http://www.springframework.org/schema/beans http://www.springframework.org/schema/beans/spring-beans.xsd
+		http://www.springframework.org/schema/aop http://www.springframework.org/schema/aop/spring-aop.xsd
+		http://www.springframework.org/schema/context http://www.springframework.org/schema/context/spring-context.xsd
+		http://www.springframework.org/schema/mvc http://www.springframework.org/schema/mvc/spring-mvc.xsd
+		http://www.springframework.org/schema/util http://www.springframework.org/schema/util/spring-util.xsd
+		">
+
+	<bean id="propertyFilter.abstract" class="com.kerz.beans.PropertyFilter"
+		abstract="true" />
+	<bean id="propertyProcessor.abstract" class="com.kerz.beans.PropertyProcessor"
+		abstract="true" />
+
+	<bean id="globalPropertyFilter" parent="propertyFilter.abstract">
+		<property name="excludeProperties">
+			<set>
+				<value>new</value>
+				<value>class</value>
+			</set>
+		</property>
+	</bean>
+
+	<bean id="serializerPropertyProcessor" parent="propertyProcessor.abstract">
+		<property name="propertyFilters">
+			<set>
+				<ref bean="globalPropertyFilter" />
+			</set>
+		</property>
+	</bean>
+
+	<bean id="deserializerPropertyProcessor" parent="propertyProcessor.abstract">
+		<property name="propertyFilters">
+			<set>
+				<ref bean="globalPropertyFilter" />
+				<bean parent="propertyFilter.abstract">
+					<property name="excludeProperties">
+						<set>
+							<value>id</value>
+						</set>
+					</property>
+				</bean>
+			</set>
+		</property>
+	</bean>
+
+	<!-- currently doesn't support (de)serializer-modifiers: https://jira.springsource.org/browse/SPR-10429 -->
+	<!-- <bean id="objectMapper" class="org.springframework.http.converter.json.Jackson2ObjectMapperFactoryBean"> -->
+	<!-- <property name="serializers"> -->
+	<!-- <list> -->
+	<!-- <bean class="com.kerz.jackson2.BindingResultSerializer" /> -->
+	<!-- </list> -->
+	<!-- </property> -->
+	<!-- </bean> -->
+
+	<!-- customize jackson object mapper -->
+	<bean id="objectMapper" class="com.kerz.jackson2.ObjectMapperFactoryBean">
+		<property name="module">
+			<bean class="com.kerz.jackson2.CustomModule">
+				<property name="serializers">
+					<list>
+						<bean class="com.kerz.jackson2.BindingResultSerializer" />
+					</list>
+				</property>
+				<property name="deserializerModifiers">
+					<list>
+						<bean class="com.kerz.jackson2.CustomDeserializerModifier"
+							p:propertyProcessor-ref="deserializerPropertyProcessor" />
+					</list>
+				</property>
+				<property name="serializerModifiers">
+					<list>
+						<bean class="com.kerz.jackson2.CustomSerializerModifier"
+							p:propertyProcessor-ref="serializerPropertyProcessor" />
+					</list>
+				</property>
+			</bean>
+		</property>
+	</bean>
+
+	<bean class="com.kerz.beans.PropertyCopier"
+		p:propertyProcessor-ref="deserializerPropertyProcessor" />
+
+	<!-- use customized jackson object mapper here -->
+	<mvc:annotation-driven>
+		<mvc:message-converters>
+			<bean
+				class="org.springframework.http.converter.json.MappingJackson2HttpMessageConverter"
+				p:objectMapper-ref="objectMapper" />
+		</mvc:message-converters>
+	</mvc:annotation-driven>
+
+	<!-- <mvc:annotation-driven /> -->
+
+	<bean id="conversionService"
+		class="org.springframework.format.support.FormattingConversionServiceFactoryBean" />
+
+	<context:component-scan base-package="com.acme.widget.web" />
+
+	<!-- Resolves localized messages*.properties and application.properties 
+		files in the application to allow for internationalization. The messages*.properties 
+		files translate generated messages which are part of the admin interface, 
+		the application.properties resource bundle localizes all application specific 
+		messages such as entity names and menu items. -->
+	<bean
+		class="org.springframework.context.support.ReloadableResourceBundleMessageSource"
+		id="messageSource" p:basenames="WEB-INF/i18n/messages,WEB-INF/i18n/application"
+		p:fallbackToSystemLocale="true" />
+
+
+	<!-- use customized jackson object mapper here *too* -->
+	<!-- <bean class="com.kerz.mvc.view.BindingResultMappingJackson2JsonView" 
+		p:objectMapper-ref="objectMapper" /> -->
+	<!-- <bean class="com.kerz.mvc.handler.JsonExceptionResolver" /> -->
+
+</beans>
